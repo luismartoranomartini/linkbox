@@ -1,1 +1,0 @@
-conteúdo aqui, sem expansão de variáveis
