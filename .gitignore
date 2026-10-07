@@ -1,2 +1,11 @@
 bin/
 .env
+cli/tarefas
+exp1/*/eco
+exp1/*/rep
+exp1/*/lista
+exp1/*/prog
+exp1/*/saida
+exp1/*/sai
+exp1/*/calc
+exp1/*/*.txt
