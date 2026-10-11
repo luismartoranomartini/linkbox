@@ -2,10 +2,10 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 )
 
@@ -16,6 +16,11 @@ var ErrUso = errors.New("uso incorreto")
 type ErroValidacao struct {
 	Campo  string
 	Motivo string
+}
+
+type Tarefa struct {
+	Titulo string `json:"titulo"`
+	Peso   int    `json:"peso"`
 }
 
 func (e *ErroValidacao) Error() string {
@@ -34,6 +39,23 @@ func codigoSaida(err error) int {
 		return 3
 	}
 	return 1
+}
+
+func carregar(arq string) ([]Tarefa, error) {
+	dados, err := os.ReadFile(arq)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("ler %s: %w", arq, err)
+	}
+	var tarefas []Tarefa
+
+	if err := json.Unmarshal(dados, &tarefas); err != nil {
+		return nil, fmt.Errorf("decodificar %s: %w", arq, err)
+	}
+	return tarefas, nil
 }
 
 func main() {
@@ -81,34 +103,29 @@ func main() {
 		fmt.Fprintf(os.Stdout, "%s [prio %d]\n", texto, *prio)
 	case "list":
 		cmd := flag.NewFlagSet("list", flag.ExitOnError)
-		bruto := cmd.Bool("bruto", false, "copia o stdin sem numerar")
 		cmd.Parse(os.Args[2:])
 		if len(cmd.Args()) != 0 {
-			fmt.Fprintln(os.Stderr, "uso: tarefas list [-bruto]")
+			fmt.Fprintln(os.Stderr, "uso: tarefas list")
 			os.Exit(2)
 		}
-		if *bruto {
-			if _, err := io.Copy(os.Stdout, os.Stdin); err != nil {
-				fmt.Fprintln(os.Stderr, "tarefas list:", err)
-				os.Exit(1)
-			}
-			return
+		tarefas, err := carregar("tarefas.json")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "tarefas list:", err)
+			os.Exit(1)
 		}
-		sc := bufio.NewScanner(os.Stdin)
 		w := bufio.NewWriter(os.Stdout)
 		n := 0
-		for sc.Scan() {
+
+		for _, t := range tarefas {
 			n++
-			fmt.Fprintf(w, "%2d. %s\n", n, sc.Text())
+			fmt.Fprintf(w, "%d. %s [prio %d]\n", n, t.Titulo, t.Peso)
 		}
+
 		if err := w.Flush(); err != nil {
 			fmt.Fprintln(os.Stderr, "tarefas list:", err)
 			os.Exit(1)
 		}
-		if err := sc.Err(); err != nil {
-			fmt.Fprintln(os.Stderr, "tarefas list:", err)
-			os.Exit(1)
-		}
+
 	default:
 		fmt.Fprintln(os.Stderr, "subcomando desconhecido:", os.Args[1])
 		fmt.Fprintln(os.Stderr, uso)
