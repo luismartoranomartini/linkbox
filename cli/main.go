@@ -58,14 +58,31 @@ func carregar(arq string) ([]Tarefa, error) {
 	return tarefas, nil
 }
 
+func salvar(nome string, dados []byte) error {
+	tmp := nome + ".temp"
+	if err := os.WriteFile(tmp, dados, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, nome)
+}
+
+func gravar(arq string, tarefas []Tarefa) error {
+	dados, err := json.Marshal(tarefas)
+	if err != nil {
+		return fmt.Errorf("codificar %s: %w", arq, err)
+	}
+	return salvar(arq, dados)
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, uso)
-		os.Exit(2)
+		os.Exit(codigoSaida(ErrUso))
 	}
 	switch os.Args[1] {
 	case "add":
 		cmd := flag.NewFlagSet("add", flag.ExitOnError)
+		arquivo := cmd.String("arquivo", "tarefas.json", "arquivar dados")
 		prio := cmd.Int("prio", 1, "prioridade da tarefas")
 		cmd.Parse(os.Args[2:])
 		if len(cmd.Args()) > 1 {
@@ -100,35 +117,47 @@ func main() {
 			os.Exit(codigoSaida(err))
 		}
 
+		tarefas, err := carregar(*arquivo)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "tarefas add:", err)
+			os.Exit(codigoSaida(err))
+		}
+		tarefas = append(tarefas, Tarefa{Titulo: texto, Peso: *prio})
+		if err := gravar(*arquivo, tarefas); err != nil {
+			fmt.Fprintln(os.Stderr, "tarefas add:", err)
+			os.Exit(codigoSaida(err))
+		}
 		fmt.Fprintf(os.Stdout, "%s [prio %d]\n", texto, *prio)
+
 	case "list":
 		cmd := flag.NewFlagSet("list", flag.ExitOnError)
+		arquivo := cmd.String("arquivo", "tarefas.json", "arquivar dados")
 		cmd.Parse(os.Args[2:])
 		if len(cmd.Args()) != 0 {
 			fmt.Fprintln(os.Stderr, "uso: tarefas list")
-			os.Exit(2)
+			os.Exit(codigoSaida(ErrUso))
 		}
-		tarefas, err := carregar("tarefas.json")
+		tarefas, err := carregar(*arquivo)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "tarefas list:", err)
-			os.Exit(1)
+			os.Exit(codigoSaida(err))
 		}
 		w := bufio.NewWriter(os.Stdout)
 		n := 0
 
 		for _, t := range tarefas {
 			n++
-			fmt.Fprintf(w, "%d. %s [prio %d]\n", n, t.Titulo, t.Peso)
+			fmt.Fprintf(w, "%2d. %s [prio %d]\n", n, t.Titulo, t.Peso)
 		}
 
 		if err := w.Flush(); err != nil {
 			fmt.Fprintln(os.Stderr, "tarefas list:", err)
-			os.Exit(1)
+			os.Exit(codigoSaida(err))
 		}
 
 	default:
 		fmt.Fprintln(os.Stderr, "subcomando desconhecido:", os.Args[1])
 		fmt.Fprintln(os.Stderr, uso)
-		os.Exit(2)
+		os.Exit(codigoSaida(ErrUso))
 	}
 }

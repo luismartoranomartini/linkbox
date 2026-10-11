@@ -14,3 +14,6 @@ exp2/*/p
 exp2/*/sc
 
 aula3/*/*/p
+
+cli/tarefas.json
+*.temp
