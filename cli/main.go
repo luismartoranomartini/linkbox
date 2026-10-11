@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +10,31 @@ import (
 )
 
 const uso = "uso: tarefas <add|list> [opções]"
+
+var ErrUso = errors.New("uso incorreto")
+
+type ErroValidacao struct {
+	Campo  string
+	Motivo string
+}
+
+func (e *ErroValidacao) Error() string {
+	return e.Campo + ": " + e.Motivo
+}
+
+func codigoSaida(err error) int {
+	if err == nil {
+		return 0
+	}
+	if errors.Is(err, ErrUso) {
+		return 2
+	}
+	var ev *ErroValidacao
+	if errors.As(err, &ev) {
+		return 3
+	}
+	return 1
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -21,9 +47,11 @@ func main() {
 		prio := cmd.Int("prio", 1, "prioridade da tarefas")
 		cmd.Parse(os.Args[2:])
 		if len(cmd.Args()) > 1 {
-			fmt.Fprintln(os.Stderr, "uso: tarefas add [-prio N] [texto]")
-			os.Exit(2)
+			err := fmt.Errorf("%w: esperado [-prio N] [texto]", ErrUso)
+			fmt.Fprintln(os.Stderr, "tarefas add:", err)
+			os.Exit(codigoSaida(err))
 		}
+
 		texto := ""
 		if len(cmd.Args()) == 1 {
 			texto = cmd.Args()[0]
@@ -34,13 +62,22 @@ func main() {
 			}
 			if err := sc.Err(); err != nil {
 				fmt.Fprintln(os.Stderr, "tarefas add:", err)
-				os.Exit(1)
+				os.Exit(codigoSaida(err))
 			}
 		}
+
 		if len(texto) == 0 {
-			fmt.Fprintln(os.Stderr, "tarefas add: texto vazio")
-			os.Exit(2)
+			err := &ErroValidacao{Campo: "texto", Motivo: "não pode ser vazio"}
+			fmt.Fprintln(os.Stderr, "tarefas add:", err)
+			os.Exit(codigoSaida(err))
 		}
+
+		if *prio < 1 || *prio > 3 {
+			err := &ErroValidacao{Campo: "prioridade", Motivo: "deve estar entre 1 e 3"}
+			fmt.Fprintln(os.Stderr, "tarefas add:", err)
+			os.Exit(codigoSaida(err))
+		}
+
 		fmt.Fprintf(os.Stdout, "%s [prio %d]\n", texto, *prio)
 	case "list":
 		cmd := flag.NewFlagSet("list", flag.ExitOnError)
